@@ -1,0 +1,11 @@
+[package]
+name = "argonfand"
+version = "0.1.0"
+authors = ["Adrian Woźniak <adrian.wozniak.1986@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rppal = { version = "0.11.3" }
+gpio = { version = "0.4.1" }
+tokio = { version = "1.4.0", features = ["full"] }
+gumdrop = "0.8.0"
