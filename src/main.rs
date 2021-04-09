@@ -1,5 +1,3 @@
-#![feature(num_as_ne_bytes)]
-
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -25,7 +23,7 @@ pub struct AppOptions {
     generate: bool,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> std::io::Result<()> {
     let opts = AppOptions::parse_args_default_or_exit();
     let mut bus = match rppal::i2c::I2c::with_bus(1) {
@@ -45,8 +43,9 @@ async fn main() -> std::io::Result<()> {
         println!("Writing /etc/argononed.conf");
         std::fs::write(
             "/etc/argononed.conf",
-            r#"45=10
-50=55
+            r#"45=0
+54=1
+55=55
 65=80
 80=100
 "#,
@@ -69,10 +68,11 @@ async fn set_speed(bus: Arc<Mutex<rppal::i2c::I2c>>, config: Arc<Config>) {
     let mut prev_block = Speed(0);
 
     if let Some(speed) = config.force_speed {
-        if let Ok(mut bus) = bus.lock() {
-            if let Err(e) = bus.write(speed.as_ne_bytes()) {
+        match bus.lock() {
+            Ok(mut bus) => if let Err(e) = bus.write(&[speed]) {
                 eprintln!("  bus out {}", e);
             }
+            Err(e) => eprintln!("{}", e),
         }
         return;
     }
@@ -91,10 +91,11 @@ async fn set_speed(bus: Arc<Mutex<rppal::i2c::I2c>>, config: Arc<Config>) {
         };
         if block != prev_block {
             prev_block = block;
-            if let Ok(mut bus) = bus.lock() {
-                if let Err(e) = bus.write(block.into_inner().as_ne_bytes()) {
+            match bus.lock() {
+                Ok(mut bus) => if let Err(e) = bus.write(&[block.into_inner()]) {
                     eprintln!("  bus out {}", e);
                 }
+                Err(e) => eprintln!("{}", e),
             }
         }
         sleep(duration);
