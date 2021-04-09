@@ -100,7 +100,7 @@ impl Config {
             }
         }
         eprintln!("  found {:?} for {:?}", speed, temp);
-        speed.map(|c| c.speed).unwrap_or(Speed(100))
+        speed.map(|c| c.speed).unwrap_or(Speed(0))
     }
 }
 
