@@ -1,9 +1,11 @@
-use crate::config::{Config, ConfigError, Speed, Temp};
+use crate::config::*;
 use gumdrop::Options;
 use std::process::Stdio;
 use std::thread::sleep;
 
 mod config;
+
+static CONFIG_PATH: &str = "/etc/argonfand.toml";
 
 #[derive(Options)]
 pub struct AppOptions {
@@ -21,6 +23,38 @@ pub struct AppOptions {
 
 fn main() -> std::io::Result<()> {
     let opts = AppOptions::parse_args_default_or_exit();
+
+    let mut config = if opts.generate {
+        println!("Writing {}", CONFIG_PATH);
+        let config = Config {
+            values: vec![
+                SpeedConfig { temp: Temp(45), speed: Speed(0) },
+                SpeedConfig { temp: Temp(54), speed: Speed(10) },
+                SpeedConfig { temp: Temp(55), speed: Speed(50) },
+                SpeedConfig { temp: Temp(65), speed: Speed(80) },
+                SpeedConfig { temp: Temp(80), speed: Speed(100) },
+            ],
+            delay: Some(1000),
+            force_speed: None,
+            help: false,
+            verbose: false,
+        };
+        std::fs::write(
+            CONFIG_PATH,
+            toml::to_string_pretty(&config).unwrap()
+        )
+        .unwrap();
+        return Ok(());
+    } else {
+        read_config()?
+    };
+    config.help = opts.help;
+    config.verbose = opts.verbose;
+    if opts.delay.is_some() {
+        config.delay = opts.delay;
+    }
+    config.force_speed = opts.force_speed;
+    eprintln!("Loaded config: {:?}", config);
     let mut bus = match rppal::i2c::I2c::with_bus(1) {
         Ok(bus) => bus,
         Err(e) => {
@@ -31,27 +65,6 @@ fn main() -> std::io::Result<()> {
     if let Err(e) = bus.set_slave_address(0x1a) {
         panic!("Failed to set I2c address {}", e);
     };
-
-    let mut config = read_config()?;
-    if opts.generate {
-        println!("Writing /etc/argononed.conf");
-        std::fs::write(
-            "/etc/argononed.conf",
-            r#"45=0
-54=1
-55=55
-65=80
-80=100
-"#,
-        )
-        .unwrap();
-        return Ok(());
-    }
-    config.help = opts.help;
-    config.verbose = opts.verbose;
-    config.delay = opts.delay;
-    config.force_speed = opts.force_speed;
-    eprintln!("Loaded config: {:?}", config);
     set_speed(&mut bus, &config);
     Ok(())
 }
@@ -105,7 +118,7 @@ fn read_temp(verbose: bool) -> Result<Temp, ConfigError> {
 }
 
 fn read_config() -> std::io::Result<Config> {
-    let contents = std::fs::read_to_string("/etc/argononed.conf")?;
-    let config: Config = contents.parse().unwrap();
+    let contents = std::fs::read_to_string(CONFIG_PATH)?;
+    let config: Config = toml::from_str(&contents).unwrap();
     Ok(config)
 }

@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
 pub enum ConfigError {
@@ -9,7 +10,9 @@ pub enum ConfigError {
     MeasureTempOutput,
 }
 
-#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent)]
 pub struct Temp(pub u8);
 
 impl FromStr for Temp {
@@ -29,7 +32,9 @@ impl FromStr for Temp {
     }
 }
 
-#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent)]
 pub struct Speed(pub u8);
 
 impl Speed {
@@ -48,10 +53,10 @@ impl FromStr for Speed {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct SpeedConfig {
-    temp: Temp,
-    speed: Speed,
+    pub temp: Temp,
+    pub speed: Speed,
 }
 
 impl FromStr for SpeedConfig {
@@ -66,16 +71,24 @@ impl FromStr for SpeedConfig {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
-    values: Vec<SpeedConfig>,
-    pub help: bool,
+    #[serde(default)]
     pub verbose: bool,
+    #[serde(default = "Config::default_delay")]
     pub delay: Option<u64>,
+    #[serde(skip_serializing, default)]
     pub force_speed: Option<u8>,
+    #[serde(skip_serializing, default)]
+    pub help: bool,
+    pub values: Vec<SpeedConfig>,
 }
 
 impl Config {
+    pub fn default_delay() -> Option<u64> {
+        Some(1000)
+    }
+
     pub fn push(&mut self, speed: SpeedConfig) {
         self.values.push(speed);
         self.values.sort_by(|a, b| a.temp.cmp(&b.temp))
@@ -104,19 +117,3 @@ impl Config {
     }
 }
 
-impl FromStr for Config {
-    type Err = ConfigError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut config = Self::default();
-        for line in s
-            .lines()
-            .map(|s| s.trim())
-            .filter(|s| !s.starts_with('#'))
-            .filter(|s| s.contains("="))
-        {
-            config.push(line.parse()?);
-        }
-        Ok(config)
-    }
-}
