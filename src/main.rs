@@ -12,7 +12,7 @@ pub struct AppOptions {
     #[options(help = "print help message")]
     help: bool,
     #[options(help = "print more info")]
-    verbose: bool,
+    verbose: Option<bool>,
     #[options(help = "delay between updates")]
     delay: Option<u64>,
     #[options(help = "enforce speed")]
@@ -49,9 +49,11 @@ fn main() -> std::io::Result<()> {
         read_config()?
     };
     config.help = opts.help;
-    config.verbose = opts.verbose;
-    if opts.delay.is_some() {
-        config.delay = opts.delay;
+    if let Some(verbose) = opts.verbose {
+        config.verbose = verbose;
+    }
+    if let Some(delay) = opts.delay {
+        config.delay = Some(delay);
     }
     config.force_speed = opts.force_speed;
     eprintln!("Loaded config: {:?}", config);
@@ -79,11 +81,20 @@ fn set_speed(bus: &mut rppal::i2c::I2c, config: &Config) {
         }
         return;
     }
+    if config.verbose {
+        println!("Starting service loop");
+    }
 
     loop {
         let temp = match read_temp(config.verbose) {
             Ok(t) => t,
-            _ => continue,
+            Err(e) => {
+                if config.verbose {
+                    eprintln!("failed to read temperature ({:?})....", e);
+                }
+                sleep(duration);
+                continue
+            },
         };
         if config.verbose {
             eprintln!("TEMP: {:?}", temp)
@@ -107,7 +118,10 @@ fn read_temp(verbose: bool) -> Result<Temp, ConfigError> {
         .arg("measure_temp")
         .stdout(Stdio::piped())
         .output()
-        .map_err(|_| ConfigError::MeasureTempOutput)?
+        .map_err(|e| {
+            eprintln!("vcgencmd failed with {:?}", e);
+            ConfigError::MeasureTempOutput
+        })?
         .stdout;
     let buffer = String::from_utf8_lossy(&output);
     let buffer = buffer.replace("temp=", "");
