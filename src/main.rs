@@ -2,6 +2,7 @@ use crate::config::*;
 use gumdrop::Options;
 use std::process::Stdio;
 use std::thread::sleep;
+use std::process::exit;
 
 mod config;
 
@@ -13,6 +14,8 @@ pub struct AppOptions {
     help: bool,
     #[options(help = "print more info")]
     verbose: Option<bool>,
+    #[options(help = "read current temperature")]
+    read: bool,
     #[options(help = "delay between updates")]
     delay: Option<u64>,
     #[options(help = "enforce speed")]
@@ -48,6 +51,19 @@ fn main() -> std::io::Result<()> {
     } else {
         read_config()?
     };
+    if opts.read {
+        match read_temp(true) {
+            Ok(temp) => {
+                println!("{:?}", temp);
+                exit(0);
+            },
+            Err(e) => {
+                eprintln!("{:?}", e);
+                exit(1);
+            },
+        };
+    }
+
     config.help = opts.help;
     if let Some(verbose) = opts.verbose {
         config.verbose = verbose;
