@@ -1,10 +1,14 @@
 use crate::config::*;
 use gumdrop::Options;
+use static_alloc::Bump;
 use std::process::Stdio;
 use std::thread::sleep;
 use std::process::exit;
 
 mod config;
+
+#[global_allocator]
+static A: Bump<[u8; 1 << 14]> = Bump::uninit();
 
 static CONFIG_PATH: &str = "/etc/argonfand.toml";
 
@@ -72,7 +76,7 @@ fn main() -> std::io::Result<()> {
         config.delay = Some(delay);
     }
     config.force_speed = opts.force_speed;
-    eprintln!("Loaded config: {:?}", config);
+    eprintln!("Loaded config: {:#?}", config);
     let mut bus = match rppal::i2c::I2c::with_bus(1) {
         Ok(bus) => bus,
         Err(e) => {
@@ -89,7 +93,7 @@ fn main() -> std::io::Result<()> {
 
 fn set_speed(bus: &mut rppal::i2c::I2c, config: &Config) {
     let duration = std::time::Duration::from_secs(config.delay.unwrap_or(30));
-    let mut prev_block = Speed(0);
+    let mut prev_block = Speed(255);
 
     if let Some(speed) = config.force_speed {
         if let Err(e) = bus.write(&[speed]) {
@@ -119,11 +123,15 @@ fn set_speed(bus: &mut rppal::i2c::I2c, config: &Config) {
         if config.verbose {
             eprintln!("SPEED: {:?}", block)
         };
-        if block != prev_block {
+        if *block != *prev_block {
             prev_block = block;
-            if let Err(e) = bus.write(&[block.into_inner()]) {
-                eprintln!("  bus out {}", e);
-            }
+            match bus.write(&[*block]) {
+                Err(e) => eprintln!("  bus out {}", e),
+                Ok(n) if config.verbose => {
+                    println!("write new speed result {} bytes written", n);
+                }
+                _ => (),
+            };
         }
         sleep(duration);
     }

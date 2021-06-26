@@ -37,9 +37,11 @@ impl FromStr for Temp {
 #[serde(transparent)]
 pub struct Speed(pub u8);
 
-impl Speed {
-    pub fn into_inner(&self) -> u8 {
-        self.0
+impl std::ops::Deref for Speed {
+    type Target = u8;
+
+    fn deref(&self) -> &u8 {
+        &self.0
     }
 }
 
@@ -87,11 +89,6 @@ pub struct Config {
 impl Config {
     pub fn default_delay() -> Option<u64> {
         Some(1000)
-    }
-
-    pub fn push(&mut self, speed: SpeedConfig) {
-        self.values.push(speed);
-        self.values.sort_by(|a, b| a.temp.cmp(&b.temp))
     }
 
     // for config
